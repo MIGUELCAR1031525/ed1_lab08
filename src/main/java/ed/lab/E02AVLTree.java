@@ -1,163 +1,164 @@
 package ed.lab;
 
-import java.util.Comparator;
 
+import java.util.Comparator;
+import java.util.NoSuchElementException;
+
+/** Ejercicio 2: Implementación de Árbol AVL genérico. */
 public class E02AVLTree<T> {
 
-    private final Comparator<T> comparator;
+    private static final class Node<T> {
+        T value;
+        Node<T> left, right;
+        int height; // 1 para hoja
+        int size;   // # nodos del subárbol
 
-    private Node<T> root;
-    private int size;
-
-    public E02AVLTree(Comparator<T> comparator) {
-        this.comparator = comparator;
-        this.root = null;
-        this.size = 0;
-    }
-
-    public void insert(T value) {
-        this.root = insert(root, value);
-    }
-
-    public void delete(T value) {
-
-    }
-
-    public T search(T value) {
-        Node<T> root = search(this.root, value);
-
-        if (root == null) {
-            return null;
-        }
-
-        return root.value;
-    }
-
-    public int height() {
-        if (this.root == null)
-            return 0;
-        return this.root.height;
-    }
-
-    public int size() {
-        return this.size;
-    }
-
-    private Node<T> search(Node<T> root, T value) {
-        if (this.root == null) {
-            return null;
-        }
-
-        int compare = comparator.compare(value, root.value);
-
-        if (compare == 0) {
-            return root;
-        }
-
-        if (compare < 0) {
-            return search(root.left, value);
-        }
-
-        return search(root.right, value);
-    }
-
-    private Node<T> insert(Node<T> root, T value) {
-        if (root == null) {
-            this.size++;
-            return new Node<>(value);
-        }
-
-        int compare = comparator.compare(value, root.value);
-
-        if (compare < 0) {
-            root.left = insert(root.left, value);
-        }
-        else if (compare > 0) {
-            root.right = insert(root.right, value);
-        } else {
-            return root;
-        }
-
-        root.height = 1 + Math.max(getHeight(root.left), getHeight(root.right));
-
-        int balance = getBalance(root);
-
-        if (balance < -1 && comparator.compare(value, root.left.value) > 0) {
-            root.left = rotateLeft(root.left);
-            return rotateRight(root);
-        }
-
-        if (balance > 1 && comparator.compare(value, root.right.value) < 0) {
-            root.right = rotateRight(root.right);
-            return rotateLeft(root);
-        }
-
-        if (balance < -1) {
-            return rotateRight(root);
-        }
-
-        if (balance > 1) {
-            return rotateLeft(root);
-        }
-
-        return root;
-    }
-
-    private int getBalance(Node<T> root) {
-        if (root == null)
-            return 0;
-
-        return getHeight(root.right) - getHeight(root.left);
-    }
-
-    private Node<T> rotateLeft(Node<T> root) {
-        if (root == null) return null;
-
-        Node<T> newRoot = root.right;
-        root.right = newRoot.left;
-        newRoot.left = root;
-
-        updateHeight(root);
-        updateHeight(newRoot);
-
-        return newRoot;
-    }
-
-    private Node<T> rotateRight(Node<T> root) {
-        if (root == null) return null;
-
-        Node<T> newRoot = root.left;
-        root.left = newRoot.right;
-        newRoot.right = root;
-
-        updateHeight(root);
-        updateHeight(newRoot);
-
-        return newRoot;
-    }
-
-    private void updateHeight(Node<T> root) {
-        if (root == null) return;
-
-        root.height = 1 + Math.max(getHeight(root.left), getHeight(root.right));
-    }
-
-    private int getHeight(Node<T> root) {
-        if (root == null)
-            return 0;
-
-        return root.height;
-    }
-
-    private static class Node<T> {
-        protected T value;
-        protected Node<T> left;
-        protected Node<T> right;
-        protected int height;
-
-        public Node(T value) {
-            this.value = value;
+        Node(T v) {
+            this.value = v;
             this.height = 1;
+            this.size = 1;
         }
+    }
+
+    private final Comparator<T> cmp;
+    private Node<T> root;
+
+    /** Instancia un árbol AVL con el comparador indicado. */
+    public E02AVLTree(Comparator<T> comparator) {
+        if (comparator == null) throw new IllegalArgumentException("Comparator null");
+        this.cmp = comparator;
+    }
+
+    /** Inserta value (ignora duplicados). */
+    public void insert(T value) {
+        if (value == null) throw new IllegalArgumentException("Valor null");
+        root = insert(root, value);
+    }
+
+    /** Elimina value si existe. */
+    public void delete(T value) {
+        if (value == null) throw new IllegalArgumentException("Valor null");
+        root = delete(root, value);
+    }
+
+    /** Busca y retorna el valor igual a 'value', o null si no existe. */
+    public T search(T value) {
+        if (value == null) return null;
+        Node<T> curr = root;
+        while (curr != null) {
+            int c = cmp.compare(value, curr.value);
+            if (c == 0) return curr.value;
+            curr = (c < 0) ? curr.left : curr.right;
+        }
+        return null;
+    }
+
+    /** Altura del árbol (0 si vacío). */
+    public int height() { return height(root); }
+
+    /** Número de nodos en el árbol. */
+    public int size() { return size(root); }
+
+    // ---------- Internos ----------
+
+    private Node<T> insert(Node<T> node, T value) {
+        if (node == null) return new Node<>(value);
+        int c = cmp.compare(value, node.value);
+        if (c < 0) {
+            node.left = insert(node.left, value);
+        } else if (c > 0) {
+            node.right = insert(node.right, value);
+        } else {
+            return node; // duplicado: no insertar
+        }
+        update(node);
+        return rebalance(node);
+    }
+
+    private Node<T> delete(Node<T> node, T value) {
+        if (node == null) return null;
+        int c = cmp.compare(value, node.value);
+        if (c < 0) {
+            node.left = delete(node.left, value);
+        } else if (c > 0) {
+            node.right = delete(node.right, value);
+        } else {
+            // encontrado
+            if (node.left == null || node.right == null) {
+                node = (node.left != null) ? node.left : node.right;
+            } else {
+                // sucesor (mínimo del subárbol derecho)
+                Node<T> succ = minNode(node.right);
+                node.value = succ.value;
+                node.right = delete(node.right, succ.value);
+            }
+        }
+        if (node == null) return null; // si era hoja
+        update(node);
+        return rebalance(node);
+    }
+
+    private Node<T> minNode(Node<T> n) {
+        while (n.left != null) n = n.left;
+        return n;
+    }
+
+    private int height(Node<T> n) { return (n == null) ? 0 : n.height; }
+    private int size(Node<T> n)   { return (n == null) ? 0 : n.size; }
+
+    private void update(Node<T> n) {
+        n.height = 1 + Math.max(height(n.left), height(n.right));
+        n.size   = 1 + size(n.left) + size(n.right);
+    }
+
+    private int balanceFactor(Node<T> n) {
+        return height(n.left) - height(n.right);
+    }
+
+    private Node<T> rebalance(Node<T> n) {
+        int bf = balanceFactor(n);
+        if (bf > 1) {
+            if (balanceFactor(n.left) < 0) n.left = rotateLeft(n.left);  // LR
+            return rotateRight(n); // LL
+        } else if (bf < -1) {
+            if (balanceFactor(n.right) > 0) n.right = rotateRight(n.right); // RL
+            return rotateLeft(n); // RR
+        }
+        return n;
+    }
+
+    private Node<T> rotateRight(Node<T> y) {
+        Node<T> x = y.left;
+        Node<T> T2 = x.right;
+        x.right = y;
+        y.left = T2;
+        update(y);
+        update(x);
+        return x;
+    }
+
+    private Node<T> rotateLeft(Node<T> x) {
+        Node<T> y = x.right;
+        Node<T> T2 = y.left;
+        y.left = x;
+        x.right = T2;
+        update(x);
+        update(y);
+        return y;
+    }
+
+    // ---------- (Opcional) select(k): útil si alguna prueba lo requiere ----------
+    /** Retorna el k-ésimo (1-indexado) en O(log n). */
+    public T select(int k) {
+        if (k <= 0 || k > size()) throw new IllegalArgumentException("k fuera de rango");
+        Node<T> curr = root;
+        while (curr != null) {
+            int leftSize = (curr.left != null) ? curr.left.size : 0;
+            int rank = leftSize + 1;
+            if (k == rank) return curr.value;
+            if (k < rank) curr = curr.left;
+            else { k -= rank; curr = curr.right; }
+        }
+        throw new NoSuchElementException("No encontrado");
     }
 }
